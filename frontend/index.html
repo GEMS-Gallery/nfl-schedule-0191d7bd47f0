@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFL Team Schedule - 2024 Season</title>
+    <title>NFL Schedule Viewer</title>
     <style>
         :root {
             --primary-color: #013369;
@@ -23,7 +23,7 @@
         }
         
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
         
@@ -45,76 +45,168 @@
             background-color: white;
         }
         
-        .game-week {
+        #schedule-container {
             background-color: white;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
             margin-bottom: 2rem;
-            overflow: hidden;
         }
         
-        .week-header {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 1rem;
-            font-weight: bold;
+        .loading {
+            text-align: center;
             font-size: 1.2rem;
+            color: var(--secondary-color);
+        }
+        
+        .error {
+            color: var(--secondary-color);
+            font-weight: bold;
         }
         
         .game {
-            display: flex;
-            align-items: center;
-            padding: 1.5rem;
             border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
         }
         
         .game:last-child {
             border-bottom: none;
         }
         
-        .team {
-            flex: 1;
+        .game-details {
             display: flex;
+            justify-content: space-between;
             align-items: center;
         }
         
-        .team-logo {
-            width: 50px;
-            height: 50px;
-            margin-right: 1rem;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
+        .team {
+            font-weight: bold;
         }
         
-        .team-name {
-            font-weight: 500;
+        .score {
+            font-size: 1.2rem;
         }
         
         .game-info {
-            text-align: center;
-            font-weight: 500;
-            color: var(--secondary-color);
-        }
-        
-        @media (max-width: 600px) {
-            .game {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .team {
-                margin-bottom: 0.5rem;
-            }
-            
-            .game-info {
-                align-self: flex-end;
-            }
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-color);
         }
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div class="container">
+        <h1>NFL Schedule Viewer</h1>
+        <select id="team-select">
+            <option value="">Select a team</option>
+        </select>
+        <div id="schedule-container">
+            <p class="loading">Loading NFL data...</p>
+        </div>
+    </div>
+
+    <script>
+        const teams = [
+            "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
+            "LA", "LAC", "LV", "MIA", "MIN", "NE", "NO", "NYG", "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS"
+        ];
+
+        async function fetchNFLData() {
+            const url = `https://raw.githubusercontent.com/nflverse/nflverse-data/master/data/games.csv`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const csvText = await response.text();
+                return parseCSV(csvText);
+            } catch (error) {
+                console.error('Error fetching NFL data:', error);
+                return null;
+            }
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',');
+            return lines.slice(1).map(line => {
+                const values = line.split(',');
+                return headers.reduce((obj, header, index) => {
+                    obj[header] = values[index];
+                    return obj;
+                }, {});
+            });
+        }
+
+        function populateTeamSelect() {
+            const select = document.getElementById('team-select');
+            teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                select.appendChild(option);
+            });
+        }
+
+        function displaySchedule(team, data) {
+            const container = document.getElementById('schedule-container');
+            container.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p class="error">No NFL data available at the moment.</p>';
+                return;
+            }
+
+            const currentYear = new Date().getFullYear();
+            let teamGames = data.filter(game => 
+                (game.season === currentYear.toString() || game.season === (currentYear - 1).toString()) && 
+                (game.away_team === team || game.home_team === team)
+            );
+
+            if (teamGames.length === 0) {
+                container.innerHTML = '<p class="error">No games found for the selected team.</p>';
+                return;
+            }
+
+            teamGames.forEach(game => {
+                const gameElement = document.createElement('div');
+                gameElement.className = 'game';
+                const isHomeTeam = game.home_team === team;
+                const opponent = isHomeTeam ? game.away_team : game.home_team;
+                const score = game.home_score && game.away_score 
+                    ? `${game.away_score} - ${game.home_score}`
+                    : 'Not started';
+                
+                gameElement.innerHTML = `
+                    <div class="game-details">
+                        <span class="team">${team}</span>
+                        <span class="score">${score}</span>
+                        <span class="team">${opponent}</span>
+                    </div>
+                    <div class="game-info">
+                        Week ${game.week} | ${new Date(game.gameday).toLocaleDateString()} | 
+                        ${isHomeTeam ? 'Home' : 'Away'} | ${game.gametime} ${game.gametime_timezone}
+                    </div>
+                `;
+                container.appendChild(gameElement);
+            });
+        }
+
+        async function initializeNFLData() {
+            populateTeamSelect();
+            const nflData = await fetchNFLData();
+            if (nflData) {
+                document.getElementById('team-select').addEventListener('change', (event) => {
+                    displaySchedule(event.target.value, nflData);
+                });
+            } else {
+                document.getElementById('schedule-container').innerHTML = '<p class="error">Failed to load NFL data. Please try again later.</p>';
+            }
+        }
+
+        // Initialize the NFL data when the page loads
+        initializeNFLData();
+    </script>
 </body>
 </html>
