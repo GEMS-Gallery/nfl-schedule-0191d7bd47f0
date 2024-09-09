@@ -1,3 +1,15 @@
+type Team = text;
+type Game = 
+ record {
+   date: Date;
+   isHome: bool;
+   opponent: Team;
+   time: text;
+   week: nat;
+ };
+type Date = text;
 service : {
-  calculate: (text, float64, float64) -> (float64);
+  generateSchedules: () -> ();
+  getSchedule: (Team) -> (opt vec Game) query;
+  getTeams: () -> (vec Team) query;
 }
